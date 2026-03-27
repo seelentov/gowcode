@@ -19,6 +19,10 @@ func NewRegistry() *Registry {
 	return r
 }
 
+func (r *Registry) RegisterFunc(name string, fn Func) {
+	r.funcs[name] = fn
+}
+
 func (r *Registry) Register(name string, fn Func) {
 	r.funcs[name] = fn
 }

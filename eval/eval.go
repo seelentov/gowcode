@@ -22,6 +22,14 @@ func NewEvaluator(vars map[string]*value.Value) *Evaluator {
 	}
 }
 
+func NewEvaluatorWithRegistry(vars map[string]*value.Value, registry *functions.Registry) *Evaluator {
+
+	return &Evaluator{
+		vars:     vars,
+		registry: registry,
+	}
+}
+
 // Eval parses and evaluates an expression string.
 func Eval(expr string, vars map[string]*value.Value) (*value.Value, error) {
 	node, err := parser.Parse(expr)
