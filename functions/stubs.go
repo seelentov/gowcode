@@ -1,6 +1,5 @@
 package functions
 
-func registerStringFuncs(r *Registry) {}
 func registerNumberFuncs(r *Registry) {}
 func registerLogicFuncs(r *Registry)  {}
 func registerListFuncs(r *Registry)   {}
