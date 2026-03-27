@@ -9,6 +9,9 @@
   - [Eval — одиночное вычисление](#eval--одиночное-вычисление)
   - [Evaluator — переиспользуемый экземпляр](#evaluator--переиспользуемый-экземпляр)
   - [Пользовательские функции](#пользовательские-функции)
+- [Переменные](#переменные)
+  - [Синтаксис {varname}](#синтаксис-varname)
+  - [Управление переменными из выражений](#управление-переменными-из-выражений)
 - [Типы](#типы)
 - [Операторы](#операторы)
 - [Встроенные функции](#встроенные-функции)
@@ -28,7 +31,7 @@
 строка выражения
       │
       ▼
-   Lexer  →  токены
+   Lexer  →  токены  ({x} → TokVar)
       │
       ▼
    Parser →  AST
@@ -42,7 +45,7 @@
    *value.Value
 ```
 
-1. **Lexer** (`lexer/`) разбивает строку на токены.
+1. **Lexer** (`lexer/`) разбивает строку на токены. `{varname}` распознаётся как отдельный токен переменной.
 2. **Parser** (`parser/`) строит AST из потока токенов.
 3. **Evaluator** (`eval/`) обходит AST, подставляет переменные из переданного словаря и вызывает функции через **Registry** (`functions/`).
 4. Все значения представлены типом `*value.Value` — тегированным объединением, которое хранит `null`, `bool`, `int`, `float`, `string`, `list` или `map`.
@@ -70,7 +73,7 @@ func main() {
         "y": value.IntVal(3),
     }
 
-    result, err := eval.Eval("x * y + 1", vars)
+    result, err := eval.Eval("{x} * {y} + 1", vars)
     if err != nil {
         panic(err)
     }
@@ -80,14 +83,14 @@ func main() {
     vars2 := map[string]*value.Value{
         "name": value.StringVal("World"),
     }
-    r2, _ := eval.Eval(`"Hello, " + name + "!"`, vars2)
+    r2, _ := eval.Eval(`"Hello, " + {name} + "!"`, vars2)
     fmt.Println(r2) // Hello, World!
 
     // Тернарный оператор
     vars3 := map[string]*value.Value{
         "score": value.IntVal(85),
     }
-    r3, _ := eval.Eval(`score >= 90 ? "A" : score >= 75 ? "B" : "C"`, vars3)
+    r3, _ := eval.Eval(`{score} >= 90 ? "A" : {score} >= 75 ? "B" : "C"`, vars3)
     fmt.Println(r3) // B
 
     // Встроенные функции
@@ -126,9 +129,9 @@ func main() {
 
     e := eval.NewEvaluator(vars)
 
-    total, _ := e.Evaluate("price * quantity")
-    final, _ := e.Evaluate("price * quantity * (1 - discount)")
-    label, _ := e.Evaluate(`final > 40 ? "expensive" : "cheap"`)
+    total, _ := e.Evaluate("{price} * {quantity}")
+    final, _ := e.Evaluate("{price} * {quantity} * (1 - {discount})")
+    label, _ := e.Evaluate(`{final} > 40 ? "expensive" : "cheap"`)
 
     fmt.Println(total) // 49.95
     fmt.Println(final) // 44.955
@@ -177,7 +180,7 @@ func main() {
 
     e := eval.NewEvaluatorWithRegistry(vars, reg)
 
-    r1, _ := e.Evaluate(`greet(titleCase(user))`)
+    r1, _ := e.Evaluate(`greet(titleCase({user}))`)
     fmt.Println(r1) // Привет, Alice!
 
     // Встроенные функции можно переопределить
@@ -191,6 +194,85 @@ func main() {
 ```
 
 > **Примечание:** `NewEvaluator` всегда создаёт реестр со всеми встроенными функциями. `NewEvaluatorWithRegistry` позволяет передать заранее настроенный реестр с добавленными или переопределёнными функциями.
+
+---
+
+## Переменные
+
+### Синтаксис {varname}
+
+Переменные в выражениях обязательно оборачиваются в фигурные скобки: `{имя}`. Это позволяет избежать конфликтов с именами встроенных функций и сделать выражения явными.
+
+```
+{price} * {quantity}        // обращение к переменным
+upper({name})               // переменная как аргумент функции
+{items}[0]                  // индексация по переменной-списку
+{config}["timeout"]         // доступ к ключу переменной-словаря
+{a} > {b} ? {a} : {b}      // переменные в тернарном операторе
+```
+
+Пробелы внутри скобок допускаются: `{ name }` эквивалентно `{name}`.
+
+Фигурные скобки без единственного идентификатора внутри трактуются как литерал словаря:
+
+```
+{"key": "value"}            // словарь — не переменная
+{a + b}                     // ошибка синтаксиса (не идентификатор)
+```
+
+### Управление переменными из выражений
+
+`Evaluator` предоставляет четыре встроенные функции для работы с переменными прямо из выражений. Это удобно для lowcode-сценариев, когда нужно накапливать состояние между несколькими вызовами `Evaluate`.
+
+| Функция | Сигнатура | Описание |
+|---------|-----------|----------|
+| `setVar` | `setVar(name, value)` | Записывает переменную в vars; возвращает `value` |
+| `getVar` | `getVar(name)` | Читает переменную из vars; возвращает `null`, если нет |
+| `deleteVar` | `deleteVar(name)` | Удаляет переменную из vars; возвращает `null` |
+| `hasVar` | `hasVar(name)` | Проверяет наличие переменной; возвращает `bool` |
+
+После `setVar` переменная доступна через `{name}` в любом последующем выражении того же экземпляра `Evaluator`.
+
+```go
+e := eval.NewEvaluator(nil)
+
+// Записываем переменную из выражения
+e.Evaluate(`setVar("total", 0)`)
+e.Evaluate(`setVar("total", {total} + 10)`)
+e.Evaluate(`setVar("total", {total} + 5)`)
+
+result, _ := e.Evaluate(`{total}`)
+fmt.Println(result) // 15
+
+// Проверка наличия
+has, _ := e.Evaluate(`hasVar("total")`)
+fmt.Println(has) // true
+
+// Удаление
+e.Evaluate(`deleteVar("total")`)
+has2, _ := e.Evaluate(`hasVar("total")`)
+fmt.Println(has2) // false
+```
+
+Пример накопления результата в lowcode-цепочке:
+
+```go
+e := eval.NewEvaluator(map[string]*value.Value{
+    "prices": value.ListVal(
+        value.FloatVal(9.99),
+        value.FloatVal(4.50),
+        value.FloatVal(14.00),
+    ),
+    "tax": value.FloatVal(0.2),
+})
+
+e.Evaluate(`setVar("subtotal", sum({prices}))`)
+e.Evaluate(`setVar("taxAmount", {subtotal} * {tax})`)
+e.Evaluate(`setVar("total", {subtotal} + {taxAmount})`)
+
+total, _ := e.Evaluate(`{total}`)
+fmt.Println(total) // 34.188
+```
 
 ---
 
@@ -248,6 +330,7 @@ func main() {
 
 | Синтаксис           | Описание                                          |
 |---------------------|---------------------------------------------------|
+| `{varname}`         | Обращение к переменной                            |
 | `cond ? a : b`      | Тернарный оператор                                |
 | `list[i]`           | Индексация списка (с 0; отрицательный — с конца)  |
 | `map["key"]`        | Доступ к ключу словаря                            |

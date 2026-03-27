@@ -16,6 +16,7 @@ const (
 	TokBool
 	TokNull
 	TokIdent
+	TokVar // {varname} — variable reference
 
 	// Operators
 	TokPlus
@@ -60,7 +61,7 @@ var tokenNames = map[TokenType]string{
 	TokQuestion: "?", TokColon: ":",
 	TokLParen: "(", TokRParen: ")", TokLBracket: "[", TokRBracket: "]",
 	TokLBrace: "{", TokRBrace: "}", TokComma: ",", TokSemicolon: ";",
-	TokEOF: "EOF",
+	TokVar: "VAR", TokEOF: "EOF",
 }
 
 func (t TokenType) String() string {
@@ -202,6 +203,45 @@ func (l *Lexer) readNumber() Token {
 	return Token{TokInt, sb.String(), line, col}
 }
 
+// tryReadVarRef checks whether the current position starts a {varname} reference.
+// If so, it consumes the entire {varname} sequence and returns the name.
+// On failure it restores the lexer position and returns ("", false).
+func (l *Lexer) tryReadVarRef() (string, bool) {
+	savedPos, savedLine, savedCol := l.pos, l.line, l.col
+
+	l.advance() // consume '{'
+
+	// skip optional whitespace inside braces
+	for l.pos < len(l.input) && unicode.IsSpace(l.peek()) {
+		l.advance()
+	}
+
+	// must start with letter or underscore
+	if l.pos >= len(l.input) || (!unicode.IsLetter(l.peek()) && l.peek() != '_') {
+		l.pos, l.line, l.col = savedPos, savedLine, savedCol
+		return "", false
+	}
+
+	var sb strings.Builder
+	for l.pos < len(l.input) && (unicode.IsLetter(l.peek()) || unicode.IsDigit(l.peek()) || l.peek() == '_') {
+		sb.WriteRune(l.advance())
+	}
+
+	// skip optional trailing whitespace
+	for l.pos < len(l.input) && unicode.IsSpace(l.peek()) {
+		l.advance()
+	}
+
+	// must be closed by '}'
+	if l.pos >= len(l.input) || l.peek() != '}' {
+		l.pos, l.line, l.col = savedPos, savedLine, savedCol
+		return "", false
+	}
+	l.advance() // consume '}'
+
+	return sb.String(), true
+}
+
 func (l *Lexer) readIdent() Token {
 	line, col := l.line, l.col
 	var sb strings.Builder
@@ -264,6 +304,14 @@ func (l *Lexer) Tokenize() ([]Token, error) {
 		if unicode.IsLetter(ch) || ch == '_' {
 			tokens = append(tokens, l.readIdent())
 			continue
+		}
+
+		// {varname} variable reference — must be checked before two-char operators
+		if ch == '{' {
+			if name, ok := l.tryReadVarRef(); ok {
+				tokens = append(tokens, Token{TokVar, name, line, col})
+				continue
+			}
 		}
 
 		// Two-char operators

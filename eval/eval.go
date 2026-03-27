@@ -16,18 +16,74 @@ type Evaluator struct {
 }
 
 func NewEvaluator(vars map[string]*value.Value) *Evaluator {
-	return &Evaluator{
+	if vars == nil {
+		vars = make(map[string]*value.Value)
+	}
+	e := &Evaluator{
 		vars:     vars,
 		registry: functions.NewRegistry(),
 	}
+	e.registerVarFuncs()
+	return e
 }
 
 func NewEvaluatorWithRegistry(vars map[string]*value.Value, registry *functions.Registry) *Evaluator {
-
-	return &Evaluator{
+	if vars == nil {
+		vars = make(map[string]*value.Value)
+	}
+	e := &Evaluator{
 		vars:     vars,
 		registry: registry,
 	}
+	e.registerVarFuncs()
+	return e
+}
+
+// registerVarFuncs registers setVar/getVar/deleteVar/hasVar functions
+// that operate directly on this evaluator's vars map.
+func (e *Evaluator) registerVarFuncs() {
+	e.registry.RegisterFunc("setVar", func(args []*value.Value) (*value.Value, error) {
+		if len(args) != 2 {
+			return nil, fmt.Errorf("setVar: expected 2 arguments, got %d", len(args))
+		}
+		e.vars[args[0].AsString()] = args[1]
+		return args[1], nil
+	})
+
+	e.registry.RegisterFunc("getVar", func(args []*value.Value) (*value.Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("getVar: expected 1 argument, got %d", len(args))
+		}
+		if v, ok := e.vars[args[0].AsString()]; ok {
+			return v, nil
+		}
+		return value.Nil(), nil
+	})
+
+	e.registry.RegisterFunc("deleteVar", func(args []*value.Value) (*value.Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("deleteVar: expected 1 argument, got %d", len(args))
+		}
+		delete(e.vars, args[0].AsString())
+		return value.Nil(), nil
+	})
+
+	e.registry.RegisterFunc("hasVar", func(args []*value.Value) (*value.Value, error) {
+		if len(args) != 1 {
+			return nil, fmt.Errorf("hasVar: expected 1 argument, got %d", len(args))
+		}
+		_, ok := e.vars[args[0].AsString()]
+		return value.BoolVal(ok), nil
+	})
+}
+
+// Evaluate parses and evaluates an expression using this evaluator's vars and registry.
+func (e *Evaluator) Evaluate(expr string) (*value.Value, error) {
+	node, err := parser.Parse(expr)
+	if err != nil {
+		return nil, err
+	}
+	return e.eval(node)
 }
 
 // Eval parses and evaluates an expression string.

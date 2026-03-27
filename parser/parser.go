@@ -315,6 +315,10 @@ func (p *Parser) parsePrimary() (ast.Node, error) {
 		}
 		return node, nil
 
+	case lexer.TokVar:
+		p.advance()
+		return &ast.Ident{Name: tok.Value}, nil
+
 	case lexer.TokLBracket:
 		return p.parseListLit()
 
