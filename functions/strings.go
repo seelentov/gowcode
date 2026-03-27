@@ -88,13 +88,6 @@ func registerStringFuncs(r *Registry) {
 		return value.StringVal(strings.ReplaceAll(args[0].AsString(), args[1].AsString(), args[2].AsString())), nil
 	})
 
-	r.Register("contains", func(args []*value.Value) (*value.Value, error) {
-		if err := argsExact(args, 2, "contains"); err != nil {
-			return nil, err
-		}
-		return value.BoolVal(strings.Contains(args[0].AsString(), args[1].AsString())), nil
-	})
-
 	r.Register("startsWith", func(args []*value.Value) (*value.Value, error) {
 		if err := argsExact(args, 2, "startsWith"); err != nil {
 			return nil, err
@@ -170,20 +163,6 @@ func registerStringFuncs(r *Registry) {
 			return value.StringVal(string(runes[start:end])), nil
 		}
 		return value.StringVal(string(runes[start:])), nil
-	})
-
-	r.Register("indexOf", func(args []*value.Value) (*value.Value, error) {
-		if err := argsExact(args, 2, "indexOf"); err != nil {
-			return nil, err
-		}
-		return value.IntVal(int64(strings.Index(args[0].AsString(), args[1].AsString()))), nil
-	})
-
-	r.Register("lastIndexOf", func(args []*value.Value) (*value.Value, error) {
-		if err := argsExact(args, 2, "lastIndexOf"); err != nil {
-			return nil, err
-		}
-		return value.IntVal(int64(strings.LastIndex(args[0].AsString(), args[1].AsString()))), nil
 	})
 
 	r.Register("repeat", func(args []*value.Value) (*value.Value, error) {

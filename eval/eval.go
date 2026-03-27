@@ -116,6 +116,21 @@ func (e *Evaluator) eval(node ast.Node) (*value.Value, error) {
 		}
 		return value.ListVal(items...), nil
 
+	case *ast.MapLit:
+		m := value.MapVal()
+		for _, entry := range n.Entries {
+			k, err := e.eval(entry.Key)
+			if err != nil {
+				return nil, err
+			}
+			v, err := e.eval(entry.Value)
+			if err != nil {
+				return nil, err
+			}
+			m.Set(k.AsString(), v)
+		}
+		return m, nil
+
 	case *ast.Index:
 		obj, err := e.eval(n.Object)
 		if err != nil {
